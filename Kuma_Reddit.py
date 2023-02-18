@@ -1,6 +1,26 @@
 #!/usr/bin/env python3 
+'''
+   Copyright (C) 2021-2022 Katelynn Cadwallader.
 
+   This file is part of Kuma_Reddit.
+
+   Kuma_Reddit is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   Kuma_Reddit is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with Kuma_Reddit; see the file COPYING.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA. 
+'''
 import praw
+import sys
 import reddit_token
 import requests
 import time
@@ -11,37 +31,40 @@ import urllib.request
 import urllib.error
 import pytz
 from fake_useragent import UserAgent
-
-from pprint import pprint
+import tzlocal
 
 class Kuma_Reddit():
-    def __init__(self, dev: bool=False, dev_subreddit: str= None) -> None:
+    def __init__(self) -> None:
         self._webhook_url = reddit_token.webhook_url
         self._json = 'reddit.json'
         self._url_list = []
         self._hash_list = []
 
+        #This is how many posts in each subreddit the script will look back.
+        #By default the subreddit script looks at subreddits in `NEW` listing order.
         self._submission_limit = 30
         self._User_Agent = UserAgent().chrome
-        self._pytz = pytz.timezone('US/Pacific')
 
+        #This forces the timezone to change based upon your OS for better readability in your prints()
+        #This script uses `UTC` for functionality purposes.
+        self._system_tz = tzlocal.get_localzone()
+        self._pytz = pytz.timezone(self._system_tz)
+
+        #Purely used to fill out the user_agent parameter of PRAW
+        self._sysos = sys.platform.title()
+        self._user = reddit_token.reddit_username.title()
+
+        #Simply place a string match of the subreddit `/r/sub` into this list.
         self._subreddits = ['awwnime', 'wallpaper', 'himecut', 'pantsu', 'ecchi', 'EcchiSkirts',
-                      'KuroiHada', 'Nekomimi', 'pantsu', 'Sukebei', 'waifusgonewild', 'HentaiAI']
+                      'KuroiHada', 'Nekomimi', 'pantsu', 'Sukebei', 'waifusgonewild', 'HentaiAI', 'Hentai']
         
         self._reddit = praw.Reddit(
             client_id=reddit_token.reddit_client_id,
             client_secret=reddit_token.reddit_secret,
-            user_agent="Linux:https://github.com/k8thekat/Kuma_Kuma:dev (by /u/Kuma_Kuma_bear)"
+            user_agent= f"{self._sysos}:https://github.com/k8thekat/Kuma_Reddit: (by /u/{self._user})"
         )
 
         last_check = self.json_load()
-        #Testing Purpose..
-        if dev:
-            #self.subreddit_inspector(subreddit= "awwnime")
-            dev_time = timedelta(hours= 1)
-            self.subreddit_media_handler(last_check= (last_check - dev_time))
-            return
-        
         self.check_loop(last_check= last_check)
 
     def json_load(self):
@@ -88,36 +111,6 @@ class Kuma_Reddit():
             json.dump(data, jfile)
             print('Saving our settings...')
             jfile.close()
-
-    def subreddit_inspector(self, subreddit: str):
-        cur_subreddit = self._reddit.subreddit(subreddit)
-        for submission in cur_subreddit.new(limit= 5):
-            #print(submission.title)
-            #if hasattr(submission, media_metadata):
-                #submission_images = [img for img in submission.media_metadata]
-                #for img in submission_images:
-                    #if img["e"] != 'Image':
-                        #continue
-                    #save img["s"]
-                        
-            #if submission.title == "[1920×1080] Fire Force S1 ED1 FHD Screen Caps [ZIP DOWNLOAD LINK]":
-                #print(dir(submission))
-            attrs = [entry for entry in (dir(submission))]
-            for entry in attrs:
-                if entry.startswith('__') or entry.startswith('_'):
-                    continue
-                print('Attr name', entry)
-                attr_data = getattr(submission, entry)
-                print(attr_data)
-                #submission.media_metadata
-                if entry == "media_metadata":
-                    #print(attr_data)
-                    for key in attr_data:
-                        print(attr_data[key], "\n")
-                        if attr_data[key]["e"] == 'Image':
-                            print('found image')
-                                
-                #print()
             
     def subreddit_media_handler(self, last_check: datetime):
         """Iterates through the subReddits Submissions and sends media_metadata"""
@@ -133,13 +126,10 @@ class Kuma_Reddit():
                 if post_time >= last_check:  # The more recent time will be greater than..
                     #Usually submissions with multiple images will be using this `attr`
                     if hasattr(submission, "media_metadata"):
-                        print('Found media_metadata')
-                        #pprint(submission.media_metadata.items())
-                        #submission_images = [img for img in submission.media_metadata]
+                        #print('Found media_metadata')
 
                         for key, img in submission.media_metadata.items():
-                            #print('image', img)
-                            #example {'status': 'valid', 'e': 'Image', 'm': 'image/jpg', 'p': [lists of random resolution images], 's': LN 149}
+                            #example {'status': 'valid', 'e': 'Image', 'm': 'image/jpg', 'p': [lists of random resolution images], 's': LN 105}
                             #This allows us to only get Images.
                             if img["e"] != 'Image':
                                 continue
@@ -147,21 +137,9 @@ class Kuma_Reddit():
                             #example 's': {'y': 2340, 'x': 1080, 'u': 'https://preview.redd.it/0u8xnxknijha1.jpg?width=1080&format=pjpg&auto=webp&v=enabled&s=04e505ade5889f6a5f559dacfad1190446607dc4'}, 'id': '0u8xnxknijha1'}
                             img_url = img["s"]["u"]
                             #Verify the URL is not already in my sent list.
-                            if img_url not in self._url_list:
-                                self._url_list.append(img_url)
-                                status = self.hash_process(img_url)
+                            if img_url in self._url_list:
+                                continue
 
-                                if status:
-                                    found_post = True
-                                    count =+ 1
-                                    self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
-                                    time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
-
-                    elif hasattr(submission, "url_overridden_by_dest"):
-                        print('Found url_overridden_by_dest')
-                        img_url = submission.url_overridden_by_dest
-
-                        if img_url not in self._url_list:
                             self._url_list.append(img_url)
                             status = self.hash_process(img_url)
 
@@ -170,6 +148,22 @@ class Kuma_Reddit():
                                 count =+ 1
                                 self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
                                 time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
+
+                    elif hasattr(submission, "url_overridden_by_dest"):
+                        #print('Found url_overridden_by_dest')
+                        img_url = submission.url_overridden_by_dest
+
+                        if img_url in self._url_list:
+                            continue
+
+                        self._url_list.append(img_url)
+                        status = self.hash_process(img_url)
+
+                        if status:
+                            found_post = True
+                            count =+ 1
+                            self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
+                            time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
                     
                     else:
                         continue
@@ -201,53 +195,7 @@ class Kuma_Reddit():
                 return False 
         else:  # Failed to find a 'image'
             print(f'URL: {img_url} is not an image -> {req_open.headers.get_content_type()}')  
-            return False                 
-        
-    def subreddit_handler(self, last_check: datetime):
-        """Iterates through the subReddits Submissions and sends url_overriden_by_dest."""
-        for sub in self._subreddits:
-            cur_subreddit = self._reddit.subreddit(sub)
-            count = 0
-            # limit - controls how far back to go (true limit is 100 entries)
-            for submission in cur_subreddit.new(limit= self._submission_limit):
-                post_time = datetime.fromtimestamp(submission.created_utc, tz=timezone.utc)
-                found_post = False
-                print(f'Checking subreddit {sub} -> submission title: {submission.title} submission post_time: {post_time.astimezone(self._pytz).ctime()} last_check: {last_check.astimezone(self._pytz).ctime()}')
-
-                if post_time >= last_check:  # The more recent time will be greater than..
-                    #If a submission doesn't have a url. Skip it.
-                    if not hasattr(submission, "url_overridden_by_dest"):
-                        continue
-
-                    elif submission.url_overridden_by_dest not in self._url_list:
-                        self._url_list.append(submission.url_overridden_by_dest)
-                        req = urllib.request.Request(url= submission.url_overridden_by_dest, headers= {'User-Agent': str(self._User_Agent)})
-
-                        try:
-                            req_open = urllib.request.urlopen(req)
-                        except Exception as e:
-                            print(f'Unable to handle {submission.url_overridden_by_dest} with error: {e}')
-                            continue
-
-                        # This only gets "Images" and not "Videos" -> content_type() returns something like 'image/jpeg' or 'text/html'
-                        if 'image' in req_open.headers.get_content_type():
-                            my_hash = hashlib.sha256(req_open.read()).hexdigest()
-                            if my_hash in self._hash_list:
-                                continue
-
-                            self._hash_list.append(my_hash)
-                            found_post = True
-                            count =+ 1
-                            self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__ \n{submission.url_overridden_by_dest}\n')
-                            time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
-                               
-                        else:  # Failed to find a 'image'
-                            print(f'submission title: {submission.title} is not an image -> {req_open.headers.get_content_type()}')
-
-            if found_post == False:
-                print(f'No new Submissions in {sub} since {last_check.ctime()}')
-
-        return count
+            return False                    
 
     def webhook_send(self, content: str, username: str = "Kuma Bear of Reddit"):
         """Sends the Data to the Discord webhook"""
@@ -267,7 +215,6 @@ class Kuma_Reddit():
 
             if cur_time - diff_time >= last_check:
                 print('Times up...checking subreddits')
-                #count = self.subreddit_handler(last_check= last_check)
                 count = self.subreddit_media_handler(last_check= last_check)
                 last_check = cur_time
                 self.json_save(last_check= last_check)
@@ -278,5 +225,4 @@ class Kuma_Reddit():
                 print(f'Sleeping for {delay*30} seconds or {delay*0.5} minutes')
                 time.sleep(delay*30)
 
-#Kuma_Reddit(dev = True, dev_subreddit= "wallpaper")
 Kuma_Reddit()
