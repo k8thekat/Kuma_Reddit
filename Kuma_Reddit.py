@@ -40,6 +40,8 @@ class Kuma_Reddit():
         self._url_list = []
         self._hash_list = []
 
+        
+
         #This is how many posts in each subreddit the script will look back.
         #By default the subreddit script looks at subreddits in `NEW` listing order.
         self._submission_limit = 30
@@ -54,6 +56,9 @@ class Kuma_Reddit():
         self._sysos = sys.platform.title()
         self._user = reddit_token.reddit_username.title()
 
+        #Feel free to change the User Name to suite you.
+        self._user_name = None
+
         #Simply place a string match of the subreddit `/r/sub` into this list.
         self._subreddits = ['awwnime', 'wallpaper', 'himecut', 'pantsu', 'ecchi', 'EcchiSkirts',
                       'KuroiHada', 'Nekomimi', 'pantsu', 'Sukebei', 'waifusgonewild', 'HentaiAI', 'Hentai']
@@ -61,7 +66,7 @@ class Kuma_Reddit():
         self._reddit = praw.Reddit(
             client_id=reddit_token.reddit_client_id,
             client_secret=reddit_token.reddit_secret,
-            user_agent= f"{self._sysos}:https://github.com/k8thekat/Kuma_Reddit: (by /u/{self._user})"
+            user_agent= f"{self._sysos}:https://github.com/k8thekat/Kuma_Reddit: (by /u/{self._user if self._user_name == None else self._user_name})"
         )
 
         last_check = self.json_load()
@@ -197,9 +202,9 @@ class Kuma_Reddit():
             print(f'URL: {img_url} is not an image -> {req_open.headers.get_content_type()}')  
             return False                    
 
-    def webhook_send(self, content: str, username: str = "Kuma Bear of Reddit"):
+    def webhook_send(self, content: str):
         """Sends the Data to the Discord webhook"""
-        data = {"content": content, "username": username}
+        data = {"content": content, "username": self._user if self._user_name == None else self._user_name}
         result = requests.post(self._webhook_url, json=data)
         if 200 <= result.status_code < 300:
             print(f"Webhook sent {result.status_code}")
