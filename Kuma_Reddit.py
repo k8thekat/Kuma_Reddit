@@ -40,8 +40,6 @@ class Kuma_Reddit():
         self._url_list = []
         self._hash_list = []
 
-        
-
         #This is how many posts in each subreddit the script will look back.
         #By default the subreddit script looks at subreddits in `NEW` listing order.
         self._submission_limit = 30
@@ -50,18 +48,19 @@ class Kuma_Reddit():
         #This forces the timezone to change based upon your OS for better readability in your prints()
         #This script uses `UTC` for functionality purposes.
         self._system_tz = tzlocal.get_localzone()
-        self._pytz = pytz.timezone(self._system_tz)
+        #Need to use the string representation of the time zone for `pytz` eg. `America/Los_Angeles`
+        self._pytz = pytz.timezone(str(self._system_tz))
 
         #Purely used to fill out the user_agent parameter of PRAW
         self._sysos = sys.platform.title()
         self._user = reddit_token.reddit_username.title()
 
         #Feel free to change the User Name to suite you.
-        self._user_name = None
+        self._user_name = "Kuma Bear of Reddit"
 
         #Simply place a string match of the subreddit `/r/sub` into this list.
         self._subreddits = ['awwnime', 'wallpaper', 'himecut', 'pantsu', 'ecchi', 'EcchiSkirts',
-                      'KuroiHada', 'Nekomimi', 'pantsu', 'Sukebei', 'waifusgonewild', 'HentaiAI', 'Hentai']
+                      'KuroiHada', 'Nekomimi', 'pantsu', 'Sukebei', 'waifusgonewild', 'HentaiAI']#, 'Hentai'] #Too many posts in this subreddit
         
         self._reddit = praw.Reddit(
             client_id=reddit_token.reddit_client_id,
@@ -119,11 +118,11 @@ class Kuma_Reddit():
             
     def subreddit_media_handler(self, last_check: datetime):
         """Iterates through the subReddits Submissions and sends media_metadata"""
+        count = 0
         for sub in self._subreddits:
             cur_subreddit = self._reddit.subreddit(sub)
-            count = 0
             # limit - controls how far back to go (true limit is 100 entries)
-            for submission in cur_subreddit.new(limit= 5): #self._submission_limit
+            for submission in cur_subreddit.new(limit= self._submission_limit): #self._submission_limit
                 post_time = datetime.fromtimestamp(submission.created_utc, tz=timezone.utc)
                 found_post = False
                 print(f'Checking subreddit {sub} -> submission title: {submission.title} submission post_time: {post_time.astimezone(self._pytz).ctime()} last_check: {last_check.astimezone(self._pytz).ctime()}')
@@ -150,7 +149,7 @@ class Kuma_Reddit():
 
                             if status:
                                 found_post = True
-                                count =+ 1
+                                count += 1
                                 self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
                                 time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
 
@@ -166,7 +165,7 @@ class Kuma_Reddit():
 
                         if status:
                             found_post = True
-                            count =+ 1
+                            count += 1
                             self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
                             time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
                     
@@ -225,7 +224,7 @@ class Kuma_Reddit():
                 self.json_save(last_check= last_check)
 
                 if count >= 1:
-                    print(f'Finished Sending {str(count) + "Images" if count > 1 else str(count) + "Image"}')
+                    print(f'Finished Sending {str(count) + " Images" if count > 1 else str(count) + " Image"}')
             else:
                 print(f'Sleeping for {delay*30} seconds or {delay*0.5} minutes')
                 time.sleep(delay*30)
