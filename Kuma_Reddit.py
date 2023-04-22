@@ -39,6 +39,7 @@ class Kuma_Reddit():
         self._json = 'reddit.json'
         self._url_list = []
         self._hash_list = []
+        self._url_prefixs:tuple[str, ...] = ("http://", "https://")
 
         #This is how many posts in each subreddit the script will look back.
         #By default the subreddit script looks at subreddits in `NEW` listing order.
@@ -59,7 +60,7 @@ class Kuma_Reddit():
         self._user_name = "Kuma Bear of Reddit"
 
         #Simply place a string match of the subreddit `/r/sub` into this list.
-        self._subreddits = ['awwnime', 'wallpaper', 'himecut', 'pantsu', 'ecchi', 'EcchiSkirts',
+        self._subreddits = ['awwnime', 'AnimeLingerie', 'wallpaper', 'himecut', 'pantsu', 'ecchi', 'EcchiSkirts',
                       'KuroiHada', 'Nekomimi', 'pantsu', 'Sukebei', 'waifusgonewild', 'HentaiAI']#, 'Hentai'] #Too many posts in this subreddit
         
         self._reddit = praw.Reddit(
@@ -72,6 +73,7 @@ class Kuma_Reddit():
         self.check_loop(last_check= last_check)
 
     def json_load(self):
+        last_check: datetime = datetime.now(tz=timezone.utc)
         with open(self._json, "r") as jfile:
             data = json.load(jfile)
             print('Loaded our settings...')
@@ -119,6 +121,7 @@ class Kuma_Reddit():
     def subreddit_media_handler(self, last_check: datetime):
         """Iterates through the subReddits Submissions and sends media_metadata"""
         count = 0
+        found_post = False
         for sub in self._subreddits:
             cur_subreddit = self._reddit.subreddit(sub)
             # limit - controls how far back to go (true limit is 100 entries)
@@ -155,11 +158,13 @@ class Kuma_Reddit():
 
                     elif hasattr(submission, "url_overridden_by_dest"):
                         #print('Found url_overridden_by_dest')
-                        img_url = submission.url_overridden_by_dest
+                        img_url:str = submission.url_overridden_by_dest
+                        if not img_url.startswith(self._url_prefixs):
+                            continue
 
                         if img_url in self._url_list:
                             continue
-
+                        
                         self._url_list.append(img_url)
                         status = self.hash_process(img_url)
 
