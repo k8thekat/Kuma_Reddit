@@ -20,6 +20,7 @@
    02110-1301, USA. 
 '''
 import praw
+from praw.models import Subreddit
 import sys
 import reddit_token
 import requests
@@ -32,6 +33,7 @@ import urllib.error
 import pytz
 from fake_useragent import UserAgent
 import tzlocal
+from typing import Union
 
 class Kuma_Reddit():
     def __init__(self) -> None:
@@ -122,11 +124,13 @@ class Kuma_Reddit():
         """Iterates through the subReddits Submissions and sends media_metadata"""
         count = 0
         found_post = False
+        img_url: Union[str, None] = None
+
         for sub in self._subreddits:
-            cur_subreddit = self._reddit.subreddit(sub)
+            cur_subreddit: Subreddit = self._reddit.subreddit(sub)
             # limit - controls how far back to go (true limit is 100 entries)
             for submission in cur_subreddit.new(limit= self._submission_limit): #self._submission_limit
-                post_time = datetime.fromtimestamp(submission.created_utc, tz=timezone.utc)
+                post_time: datetime = datetime.fromtimestamp(submission.created_utc, tz=timezone.utc)
                 found_post = False
                 print(f'Checking subreddit {sub} -> submission title: {submission.title} submission post_time: {post_time.astimezone(self._pytz).ctime()} last_check: {last_check.astimezone(self._pytz).ctime()}')
 
@@ -138,51 +142,41 @@ class Kuma_Reddit():
                         for key, img in submission.media_metadata.items():
                             #example {'status': 'valid', 'e': 'Image', 'm': 'image/jpg', 'p': [lists of random resolution images], 's': LN 105}
                             #This allows us to only get Images.
-                            if img["e"] != 'Image':
+                            if "e" in img and img["e"] == 'Image':
+                                #example 's': {'y': 2340, 'x': 1080, 'u': 'https://preview.redd.it/0u8xnxknijha1.jpg?width=1080&format=pjpg&auto=webp&v=enabled&s=04e505ade5889f6a5f559dacfad1190446607dc4'}, 'id': '0u8xnxknijha1'}
+                                img_url = img["s"]["u"]
+                                   
+                            else:
                                 continue
-                            
-                            #example 's': {'y': 2340, 'x': 1080, 'u': 'https://preview.redd.it/0u8xnxknijha1.jpg?width=1080&format=pjpg&auto=webp&v=enabled&s=04e505ade5889f6a5f559dacfad1190446607dc4'}, 'id': '0u8xnxknijha1'}
-                            img_url = img["s"]["u"]
-                            #Verify the URL is not already in my sent list.
-                            if img_url in self._url_list:
-                                continue
-
-                            self._url_list.append(img_url)
-                            status = self.hash_process(img_url)
-
-                            if status:
-                                found_post = True
-                                count += 1
-                                self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
-                                time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
 
                     elif hasattr(submission, "url_overridden_by_dest"):
                         #print('Found url_overridden_by_dest')
-                        img_url:str = submission.url_overridden_by_dest
+                        img_url = submission.url_overridden_by_dest
                         if not img_url.startswith(self._url_prefixs):
                             continue
+        
+                    else:
+                        continue
 
+                    if img_url != None:
                         if img_url in self._url_list:
                             continue
-                        
+
                         self._url_list.append(img_url)
-                        status = self.hash_process(img_url)
+                        status: bool = self.hash_process(img_url)
 
                         if status:
                             found_post = True
                             count += 1
                             self.webhook_send(content= f'**r/{sub}** ->  __{submission.title}__\n{img_url}\n')
                             time.sleep(1) #Soft buffer delay between sends to prevent rate limiting.
-                    
-                    else:
-                        continue
 
             if found_post == False:
                 print(f'No new Submissions in {sub} since {last_check.ctime()}')
 
         return count
 
-    def hash_process(self, img_url: str):
+    def hash_process(self, img_url: str) -> bool:
         """Checks the Hash of the supplied url against our hash list."""
         req = urllib.request.Request(url= img_url, headers= {'User-Agent': str(self._User_Agent)})
 
